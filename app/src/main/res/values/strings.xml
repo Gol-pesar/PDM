@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">PDM</string>
+    <string name="app_subtitle">Palang Download Manager</string>
+    <string name="nav_transfers">دانلودها</string>
+    <string name="nav_categories">دسته‌بندی‌ها</string>
+    <string name="nav_settings">تنظیمات</string>
+    <string name="action_add_download">دانلود جدید</string>
+    <string name="notification_channel_name">دانلودهای PDM</string>
+    <string name="notification_channel_desc">نمایش پیشرفت دانلودهای در حال انجام</string>
+    <string name="cd_brand_logo">لوگوی PDM</string>
+    <string name="cd_add_download">افزودن لینک دانلود جدید</string>
+    <string name="cd_search">جستجو در دانلودها</string>
+</resources>
