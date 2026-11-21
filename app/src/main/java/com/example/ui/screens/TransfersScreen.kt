@@ -343,7 +343,7 @@ private fun FriendlyEmptyState(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Image(
-                painter = painterResource(id = R.drawable.ic_pdm_logo_1795244640873),
+                painter = painterResource(id = R.drawable.ic_launcher_logo),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

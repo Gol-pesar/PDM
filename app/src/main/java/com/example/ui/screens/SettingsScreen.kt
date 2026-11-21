@@ -472,7 +472,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_pdm_logo_1795244640873),
+                        painter = painterResource(id = R.drawable.ic_launcher_logo),
                         contentDescription = "لوگوی PDM",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -487,7 +487,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Palang Download Manager • v1.0",
+                                text = "Palang Download Manager • v1.2",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )

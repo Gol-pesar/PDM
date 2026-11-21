@@ -120,14 +120,18 @@ jobs:
           echo "Using Android build-tools: ${build_tools_dir}"
 
           work_dir="$(mktemp -d "${RUNNER_TEMP}/apk-sign.XXXXXX")"
+          clean_apk="${work_dir}/app-unsigned.apk"
           aligned_apk="${work_dir}/app-aligned.apk"
           signed_apk="${work_dir}/app-signed.apk"
 
-          if "${build_tools_dir}/zipalign" -f -P 16 4 "$expected_apk" "$aligned_apk" 2>/dev/null; then
+          cp -- "$expected_apk" "$clean_apk"
+          zip -qd "$clean_apk" "META-INF/MANIFEST.MF" "META-INF/*.SF" "META-INF/*.RSA" "META-INF/*.DSA" "META-INF/*.EC" 2>/dev/null || true
+
+          if "${build_tools_dir}/zipalign" -f -P 16 4 "$clean_apk" "$aligned_apk" 2>/dev/null; then
             align_check_args=(-c -P 16 4)
             echo "Aligned APK with 16KB + 4-byte alignment."
           else
-            "${build_tools_dir}/zipalign" -f -p 4 "$expected_apk" "$aligned_apk"
+            "${build_tools_dir}/zipalign" -f -p 4 "$clean_apk" "$aligned_apk"
             align_check_args=(-c -p 4)
             echo "Aligned APK with 4KB page + 4-byte alignment."
           fi

@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.dadeban.krmtxz"
     minSdk = 23
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1"
+    versionCode = 3
+    versionName = "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -66,7 +66,7 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
   packaging {
     jniLibs {
-      useLegacyPackaging = false
+      useLegacyPackaging = true
     }
     resources {
       excludes += setOf(

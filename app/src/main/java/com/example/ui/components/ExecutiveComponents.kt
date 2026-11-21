@@ -139,7 +139,7 @@ fun PdmTopHeader(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_pdm_logo_1795244640873),
+                    painter = painterResource(id = R.drawable.ic_launcher_logo),
                     contentDescription = stringResource(R.string.cd_brand_logo),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
