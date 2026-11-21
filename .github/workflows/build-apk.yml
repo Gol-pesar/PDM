@@ -60,12 +60,17 @@ jobs:
         with:
           gradle-version: 9.3.1
 
-      - name: Create temporary debug keystore
+      - name: Prepare debug keystore
         shell: bash
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
           if [[ -f "./debug.keystore" ]]; then
             echo "Debug keystore already exists at ./debug.keystore; skipping generation."
+          elif [[ -n "${DEBUG_KEYSTORE_BASE64:-}" ]]; then
+            echo "Restoring persistent debug keystore from DEBUG_KEYSTORE_BASE64 secret."
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "./debug.keystore"
           else
             if [[ -z "${JAVA_HOME:-}" || ! -x "$JAVA_HOME/bin/keytool" ]]; then
               echo "::error::keytool from the configured Java 17 installation was not found at \$JAVA_HOME/bin/keytool."
@@ -78,20 +83,80 @@ jobs:
               -alias androiddebugkey \
               -keypass android \
               -keyalg RSA \
+              -sigalg SHA256withRSA \
               -keysize 2048 \
               -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
           fi
 
           if [[ ! -f "./debug.keystore" || ! -s "./debug.keystore" ]]; then
-            echo "::error::Failed to create temporary debug keystore at ./debug.keystore."
+            echo "::error::Failed to prepare debug keystore at ./debug.keystore."
             exit 1
           fi
-          echo "Verified temporary debug keystore exists."
+          echo "Verified debug keystore exists."
 
       - name: Build debug APK
         shell: bash
         run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Align and sign APK for universal Android compatibility (v1 + v2 + v3)
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_apk="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [[ ! -f "$expected_apk" || ! -s "$expected_apk" ]]; then
+            echo "::error::Expected debug APK not found or empty at $expected_apk."
+            exit 1
+          fi
+
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          build_tools_dir="$(ls -d "${sdk_root}"/build-tools/* 2>/dev/null | sort -V | tail -n 1 || true)"
+
+          if [[ -z "$build_tools_dir" || ! -x "${build_tools_dir}/zipalign" || ! -x "${build_tools_dir}/apksigner" ]]; then
+            echo "::error::Android SDK build-tools (zipalign and apksigner) not found under ${sdk_root}/build-tools."
+            exit 1
+          fi
+          echo "Using Android build-tools: ${build_tools_dir}"
+
+          work_dir="$(mktemp -d "${RUNNER_TEMP}/apk-sign.XXXXXX")"
+          aligned_apk="${work_dir}/app-aligned.apk"
+          signed_apk="${work_dir}/app-signed.apk"
+
+          if "${build_tools_dir}/zipalign" -f -P 16 4 "$expected_apk" "$aligned_apk" 2>/dev/null; then
+            align_check_args=(-c -P 16 4)
+            echo "Aligned APK with 16KB + 4-byte alignment."
+          else
+            "${build_tools_dir}/zipalign" -f -p 4 "$expected_apk" "$aligned_apk"
+            align_check_args=(-c -p 4)
+            echo "Aligned APK with 4KB page + 4-byte alignment."
+          fi
+
+          "${build_tools_dir}/apksigner" sign \
+            --ks "./debug.keystore" \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --min-sdk-version 23 \
+            --out "$signed_apk" \
+            "$aligned_apk"
+
+          mv -f -- "$signed_apk" "$expected_apk"
+          rm -rf -- "$work_dir"
+
+          "${build_tools_dir}/zipalign" "${align_check_args[@]}" "$expected_apk"
+          verify_output="$("${build_tools_dir}/apksigner" verify --verbose --print-certs "$expected_apk")"
+          echo "$verify_output"
+
+          for scheme in "v1 scheme" "v2 scheme" "v3 scheme"; do
+            if ! grep -q "Verified using ${scheme}.*: true" <<< "$verify_output"; then
+              echo "::error::APK signature verification failed for ${scheme}."
+              exit 1
+            fi
+          done
 
       - name: Verify debug APK
         shell: bash
@@ -205,8 +270,9 @@ jobs:
             "- **Workflow Run Attempt:** ${GITHUB_RUN_ATTEMPT}" \
             "- **Source Commit SHA:** ${GITHUB_SHA}" \
             "- **APK Asset:** ${ASSET_NAME}" \
+            "- **Android Compatibility:** Android 6.0 (API 23) – Android 16 (API 36), universal ABIs (arm64-v8a, armeabi-v7a, x86, x86_64), 16KB page-aligned, signed with v1 + v2 + v3 schemes." \
             "" \
-            "This APK is intended for testing only. It is not a Google Play Store production release and is signed only with a temporary debug keystore.")"
+            "If you previously installed an older debug build signed with a different temporary key, uninstall the previous version first before installing this APK.")"
 
           gh release create "$release_tag" "$ASSET_PATH" \
             --target "$GITHUB_SHA" \
