@@ -22,6 +22,12 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE id = :id LIMIT 1")
     suspend fun getDownloadById(id: Long): DownloadEntity?
 
+    @Query("SELECT * FROM downloads WHERE status IN (:statuses) ORDER BY priority DESC, createdAt DESC")
+    fun observeDownloadsByStatuses(statuses: List<String>): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads WHERE status = :status ORDER BY completedAt DESC, createdAt DESC")
+    fun observeFinishedDownloads(status: String): Flow<List<DownloadEntity>>
+
     @Query("SELECT * FROM downloads WHERE status IN (:statuses) ORDER BY priority DESC, createdAt ASC")
     suspend fun getDownloadsByStatuses(statuses: List<String>): List<DownloadEntity>
 
@@ -36,6 +42,21 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET status = :status, errorMessage = :errorMessage WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String, errorMessage: String = "")
+
+    @Query("UPDATE downloads SET status = :targetStatus, errorMessage = '' WHERE status IN (:sourceStatuses)")
+    suspend fun updateStatuses(sourceStatuses: List<String>, targetStatus: String)
+
+    @Query("UPDATE downloads SET status = :targetStatus, errorMessage = '' WHERE queueId = :queueId AND status IN (:sourceStatuses)")
+    suspend fun updateQueueStatuses(queueId: Long, sourceStatuses: List<String>, targetStatus: String)
+
+    @Query("UPDATE downloads SET priority = :priority WHERE id = :id")
+    suspend fun updatePriority(id: Long, priority: Int)
+
+    @Query("UPDATE downloads SET queueId = :queueId WHERE id = :id")
+    suspend fun updateQueueAssignment(id: Long, queueId: Long)
+
+    @Query("UPDATE downloads SET status = :status, downloadedBytes = :downloadedBytes, totalBytes = :totalBytes, completedAt = :completedAt, errorMessage = '' WHERE id = :id")
+    suspend fun markCompleted(id: Long, status: String, downloadedBytes: Long, totalBytes: Long, completedAt: Long)
 
     @Query("UPDATE downloads SET downloadedBytes = :downloadedBytes, totalBytes = :totalBytes WHERE id = :id")
     suspend fun updateProgress(id: Long, downloadedBytes: Long, totalBytes: Long)
@@ -54,6 +75,9 @@ interface DownloadDao {
 
     @Query("DELETE FROM downloads WHERE status = :status")
     suspend fun deleteByStatus(status: String)
+
+    @Query("DELETE FROM downloads WHERE queueId = :queueId AND status = :status")
+    suspend fun deleteQueueByStatus(queueId: Long, status: String)
 }
 
 @Dao

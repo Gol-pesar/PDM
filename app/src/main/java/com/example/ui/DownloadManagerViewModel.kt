@@ -80,7 +80,7 @@ class DownloadManagerViewModel(application: Application) : AndroidViewModel(appl
     private val database = DownloadDatabase.getInstance(application)
     val repository = DownloadRepository(application, database)
     private val settingsRepository = SettingsRepository(application)
-    private val engine = DownloadEngine(application, repository, settingsRepository)
+    val engine = DownloadEngine(application, repository, settingsRepository)
 
     private val _filterState = MutableStateFlow(FilterState())
     private val _storageInfo = MutableStateFlow(StorageInfo(0L, 0L, 0L))
@@ -592,7 +592,8 @@ class DownloadManagerViewModel(application: Application) : AndroidViewModel(appl
             val matchesStatus = when (filter.statusFilter) {
                 StatusFilter.ALL -> true
                 StatusFilter.ACTIVE -> item.statusEnum == DownloadStatus.DOWNLOADING ||
-                    item.statusEnum == DownloadStatus.CONNECTING
+                    item.statusEnum == DownloadStatus.CONNECTING ||
+                    item.statusEnum == DownloadStatus.QUEUED
                 StatusFilter.QUEUED -> item.statusEnum == DownloadStatus.QUEUED
                 StatusFilter.PAUSED -> item.statusEnum == DownloadStatus.PAUSED
                 StatusFilter.COMPLETED -> item.statusEnum == DownloadStatus.COMPLETED

@@ -40,6 +40,22 @@ class DownloadRepository(
     private val queueDao = database.queueDao()
 
     val downloadsFlow: Flow<List<DownloadEntity>> = downloadDao.observeAllDownloads()
+    val activeDownloadsFlow: Flow<List<DownloadEntity>> = downloadDao.observeDownloadsByStatuses(
+        listOf(
+            DownloadStatus.DOWNLOADING.name,
+            DownloadStatus.CONNECTING.name,
+            DownloadStatus.QUEUED.name
+        )
+    )
+    val pausedDownloadsFlow: Flow<List<DownloadEntity>> = downloadDao.observeDownloadsByStatuses(
+        listOf(DownloadStatus.PAUSED.name)
+    )
+    val finishedDownloadsFlow: Flow<List<DownloadEntity>> = downloadDao.observeFinishedDownloads(
+        DownloadStatus.COMPLETED.name
+    )
+    val failedDownloadsFlow: Flow<List<DownloadEntity>> = downloadDao.observeDownloadsByStatuses(
+        listOf(DownloadStatus.FAILED.name)
+    )
     val categoriesFlow: Flow<List<CategoryEntity>> = categoryDao.observeAllCategories()
     val queuesFlow: Flow<List<QueueEntity>> = queueDao.observeAllQueues()
 
@@ -124,6 +140,38 @@ class DownloadRepository(
     suspend fun updateStatus(id: Long, status: DownloadStatus, errorMessage: String = "") =
         downloadDao.updateStatus(id, status.name, errorMessage)
 
+    suspend fun updateStatuses(
+        sourceStatuses: List<DownloadStatus>,
+        targetStatus: DownloadStatus,
+        queueId: Long? = null
+    ) {
+        val sources = sourceStatuses.map { it.name }
+        if (queueId == null) {
+            downloadDao.updateStatuses(sources, targetStatus.name)
+        } else {
+            downloadDao.updateQueueStatuses(queueId, sources, targetStatus.name)
+        }
+    }
+
+    suspend fun updatePriority(id: Long, priorityLevel: Int) =
+        downloadDao.updatePriority(id, priorityLevel)
+
+    suspend fun updateQueueAssignment(id: Long, queueId: Long) =
+        downloadDao.updateQueueAssignment(id, queueId)
+
+    suspend fun markDownloadCompleted(id: Long, completedAt: Long = System.currentTimeMillis()) {
+        val current = downloadDao.getDownloadById(id) ?: return
+        val resolvedTotal = if (current.totalBytes > 0L) current.totalBytes else current.downloadedBytes
+        val resolvedDownloaded = if (resolvedTotal > 0L) resolvedTotal else current.downloadedBytes
+        downloadDao.markCompleted(
+            id = id,
+            status = DownloadStatus.COMPLETED.name,
+            downloadedBytes = resolvedDownloaded,
+            totalBytes = resolvedTotal,
+            completedAt = completedAt
+        )
+    }
+
     suspend fun updateProgress(id: Long, downloadedBytes: Long, totalBytes: Long) =
         downloadDao.updateProgress(id, downloadedBytes, totalBytes)
 
@@ -157,7 +205,18 @@ class DownloadRepository(
             downloadDao.deleteById(download.id)
         }
 
-    suspend fun clearCompleted() = downloadDao.deleteByStatus(DownloadStatus.COMPLETED.name)
+    suspend fun deleteDownloadById(downloadId: Long, deleteFileFromDisk: Boolean = false) {
+        val existing = downloadDao.getDownloadById(downloadId) ?: return
+        deleteDownload(existing, deleteFileFromDisk)
+    }
+
+    suspend fun clearCompleted(queueId: Long? = null) {
+        if (queueId == null) {
+            downloadDao.deleteByStatus(DownloadStatus.COMPLETED.name)
+        } else {
+            downloadDao.deleteQueueByStatus(queueId, DownloadStatus.COMPLETED.name)
+        }
+    }
 
     suspend fun addCustomCategory(nameFa: String, extensionsCsv: String, subfolder: String) {
         val cleanId = "custom_${System.currentTimeMillis()}"

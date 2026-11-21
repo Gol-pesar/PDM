@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.DownloadStatus
 import com.example.ui.AppTab
 import com.example.ui.DownloadManagerViewModel
+import com.example.ui.DownloadQueueViewModel
 import com.example.ui.components.PdmTopHeader
 import com.example.ui.dialogs.AddDownloadSheet
 import com.example.ui.dialogs.DownloadDetailSheet
@@ -75,13 +76,19 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val viewModel: DownloadManagerViewModel by viewModels()
+    private val queueViewModel: DownloadQueueViewModel by viewModels {
+        DownloadQueueViewModel.factory(viewModel.repository, viewModel.engine)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleIncomingIntent(intent)
         setContent {
-            PdmApp(viewModel = viewModel)
+            PdmApp(
+                viewModel = viewModel,
+                queueViewModel = queueViewModel
+            )
         }
     }
 
@@ -105,12 +112,16 @@ private fun tabIcons(tab: AppTab): Pair<ImageVector, ImageVector> = when (tab) {
 }
 
 @Composable
-fun PdmApp(viewModel: DownloadManagerViewModel) {
+fun PdmApp(
+    viewModel: DownloadManagerViewModel,
+    queueViewModel: DownloadQueueViewModel
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val queueUiState by queueViewModel.uiState.collectAsStateWithLifecycle()
     val probeState by viewModel.probeState.collectAsStateWithLifecycle()
     val inspectedDownload by viewModel.inspectedDownload.collectAsStateWithLifecycle()
     val inspectedSegments by viewModel.inspectedSegments.collectAsStateWithLifecycle()
@@ -147,6 +158,12 @@ fun PdmApp(viewModel: DownloadManagerViewModel) {
 
     LaunchedEffect(Unit) {
         viewModel.toastEvents.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        queueViewModel.events.collect { msg ->
             snackbarHostState.showSnackbar(msg)
         }
     }
@@ -282,19 +299,21 @@ fun PdmApp(viewModel: DownloadManagerViewModel) {
                             when (currentTab) {
                                 AppTab.TRANSFERS -> TransfersScreen(
                                     uiState = uiState,
+                                    queueUiState = queueUiState,
                                     isSearchOpen = isSearchOpen,
                                     onSearchChange = viewModel::setSearchQuery,
                                     onStatusFilterChange = viewModel::setStatusFilter,
                                     onCategoryFilterChange = viewModel::setCategoryFilter,
                                     onSortChange = viewModel::setSortOption,
-                                    onPauseAll = viewModel::pauseAll,
-                                    onResumeAll = viewModel::resumeAll,
-                                    onClearCompleted = viewModel::clearCompleted,
+                                    onPauseAll = queueViewModel::pauseAllActive,
+                                    onResumeAll = queueViewModel::resumeAllPaused,
+                                    onClearCompleted = queueViewModel::clearFinishedTasks,
                                     onTogglePauseResume = { item ->
                                         val running = item.statusEnum == DownloadStatus.DOWNLOADING ||
-                                            item.statusEnum == DownloadStatus.CONNECTING
-                                        if (running) viewModel.pause(item.id)
-                                        else viewModel.startOrResume(item.id)
+                                            item.statusEnum == DownloadStatus.CONNECTING ||
+                                            item.statusEnum == DownloadStatus.QUEUED
+                                        if (running) queueViewModel.pauseTask(item.id)
+                                        else queueViewModel.resumeTask(item.id)
                                     },
                                     onInspectDownload = { item -> viewModel.openInspector(item.id) },
                                     onOpenFile = { item ->

@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -57,6 +59,7 @@ import com.example.R
 import com.example.data.model.DownloadEntity
 import com.example.data.model.SortOption
 import com.example.data.model.StatusFilter
+import com.example.ui.DownloadQueueUiState
 import com.example.ui.MainUiState
 import com.example.ui.components.ActiveTransferBanner
 import com.example.ui.components.DownloadItemCard
@@ -66,6 +69,7 @@ import com.example.ui.components.categoryIconFor
 @Composable
 fun TransfersScreen(
     uiState: MainUiState,
+    queueUiState: DownloadQueueUiState,
     isSearchOpen: Boolean,
     onSearchChange: (String) -> Unit,
     onStatusFilterChange: (StatusFilter) -> Unit,
@@ -85,10 +89,12 @@ fun TransfersScreen(
         uiState.categories.associateBy { it.id }
     }
     val selectedCategory = uiState.filterState.selectedCategoryId?.let { categoryMap[it] }
+    val queueSuccess = queueUiState as? DownloadQueueUiState.Success
 
     val primaryFilters = listOf(
         StatusFilter.ALL,
         StatusFilter.ACTIVE,
+        StatusFilter.PAUSED,
         StatusFilter.COMPLETED
     )
 
@@ -153,17 +159,32 @@ fun TransfersScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         primaryFilters.forEach { filter ->
                             val selected = uiState.filterState.statusFilter == filter
+                            val count = when (filter) {
+                                StatusFilter.ALL -> queueSuccess?.totalCount ?: uiState.allDownloads.size
+                                StatusFilter.ACTIVE -> queueSuccess?.activeCount ?: (uiState.activeCount + uiState.queuedCount)
+                                StatusFilter.PAUSED -> queueSuccess?.pausedCount ?: 0
+                                StatusFilter.COMPLETED -> queueSuccess?.finishedCount ?: uiState.completedCount
+                                else -> 0
+                            }
+                            val labelText = if (count > 0 && filter != StatusFilter.ALL) {
+                                "${filter.labelFa} ($count)"
+                            } else {
+                                filter.labelFa
+                            }
                             FilterChip(
                                 selected = selected,
                                 onClick = { onStatusFilterChange(filter) },
                                 label = {
                                     Text(
-                                        text = filter.labelFa,
+                                        text = labelText,
                                         style = MaterialTheme.typography.labelMedium
                                     )
                                 },
